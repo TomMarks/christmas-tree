@@ -1,9 +1,12 @@
-import datetime
-import torch
-import torchaudio
-
 SAMPLING_RATE = 16000
 USE_ONNX = False # change this to True if you want to test onnx model
+
+import os
+import torch
+import io
+torch.set_num_threads(1)
+
+import numpy
 
 # need to pip install soundfile or you will get "no backend" error from torch
 from pprint import pprint
@@ -39,7 +42,7 @@ vad_iterator = VADIterator(model)
 
 # *** Import Ends / Code Begins ***
 
-def speech_in_audio(audio_tensor_list):
+def speech_in_audio(audio_data):
     """
     Extracts speech chunks from audio data using a voice activity detection (VAD) model.
 
@@ -54,8 +57,11 @@ def speech_in_audio(audio_tensor_list):
 
     """
     #try:
-    print(f"Audio tensor shape: {audio_tensor_list[0].shape}")
-    speech_timestamps = get_speech_timestamps(audio_tensor_list[0].data, model, sampling_rate=SAMPLING_RATE)
+    audio_string.join(i for i in audio_data)
+
+    audio_tensor = torch.load(io.BytesIO(audio_string))
+
+    speech_timestamps = get_speech_timestamps(audio_tensor, model, sampling_rate=SAMPLING_RATE)
     pprint(speech_timestamps)
     # Remove speechless chunks
     chunks = collect_chunks(speech_timestamps, wav)

@@ -1,48 +1,67 @@
 import wave
 import torch
-import pyaudio
+import torchaudio
+import torchaudio.utils.ffmpeg_utils
 import silero_vad_utils
 import time
 
 # Callback function for audio stream
-def audio_callback(in_data, frame_count, time_info, status):
-    global audio_buffer
+""" def audio_callback(in_data, frame_count, time_info, status):
+    global incoming_audio
 
-    # Add to the list as a tuple in case we need any of this
-    audio_buffer.append((in_data, frame_count, time_info, status))
+    incoming_audio.append((in_data, frame_count, time_info, status))
     return (in_data, pyaudio.paContinue)
-# end audio_callback
 
-# Initialize globals
-in_speech = False
-audio_buffer = []
+ """# Torchaudio microphone stream
+
+
 
 # Setup channel info
-FORMAT = pyaudio.paInt16 # data type formate
+FORMAT = torch.int16 # data type formate
+FORMAT_STR = "s16p"
 CHANNELS = 1 # Adjust to your number of channels
 RATE = 16000 # Sample Rate
-CHUNK = 2000 # Block Size
+CHUNK = 1024 # Block Size
 FRAMES_PER_CHUNK = 4000
+RECORD_SECONDS = 5 # Record time
+WAVE_OUTPUT_FILENAME = "file.wav"
+USB_CARD_NUM = "3"
+SOURCE_HW = "plughw:" + USB_CARD_NUM + "," + "0"
+
+in_speech = False
+incoming_audio = []
+
+# Startup pyaudio instance
+streamer = torchaudio.io.StreamReader(
+    src=SOURCE_HW, # should select default microphone
+    format="alsa"
+    )
+
+# configure the audio stream output
+streamer.add_basic_audio_stream(frames_per_chunk=FRAMES_PER_CHUNK, sample_rate=RATE, format=FORMAT_STR, stream_index=0, num_channels=CHANNELS)
+print("The number of source streams:", streamer.num_src_streams)
+print(streamer.get_src_stream_info(0))
+print(streamer.get_out_stream_info(0))
 
 # start Recording
-audio = pyaudio.PyAudio()
-stream = audio.open(format=FORMAT, channels=CHANNELS, rate=RATE, input=True,
-    frames_per_buffer=CHUNK, stream_callback=audio_callback)
 print("Stream opened...")
 
 # aquisition loop
+stream = streamer.stream(timeout=-1, backoff=1.0)
 while 1:
-    if audio_buffer is not None and len(audio_buffer) > 0:
-        aud = silero_vad_utils.speech_in_audio(audio_buffer)
+    #print("Checking for audio...")
+    buf = next(stream)
+    if buf is not None:
+        aud = silero_vad_utils.speech_in_audio(buf)
         if aud is not None:
             if in_speech == False:
                 # print the current time
                 in_speech = True
-                print(f"Start of speech detected at {os.time(): %x}")
+                print("Start of speech detected at %hh:mm:ss" % os.time())
         else:
             if in_speech == True:
                 in_speech = False
-                print("End of speech detected at %x" % os.time())
+                print("End of speech detected at %hh:mm:ss" % os.time())
     else:
         time.sleep(0.1)
     
